@@ -13,7 +13,7 @@ class ContexManager:
         return json_data
 
     def __exit__(self, exc_type, exc_value, exc_traceback):
-        json.dumps(JsonData.get_data())
+        #json.dumps(JsonData.get_data())
         if not self.__file.closed:
             self.__file.close()
 
