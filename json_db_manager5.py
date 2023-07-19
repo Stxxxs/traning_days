@@ -1,62 +1,82 @@
-import os
 import json
 from pathlib import Path
+from typing import Optional, Any
 
 
-class ContexManager:
+class JsonDataLoader:
+    def __init__(self, filename: str) -> None:
+        self.filename = Path(filename)
+        self.data: dict[str, Any] | None = None
 
-    def __init__(self, filename, mode="r+"):
-        self.filename = filename
-        self.mode = mode
+    def __enter__(self) -> dict[str, Any]:
+        if not self.filename.exists():
+            self.filename.touch()
+            self.data = {}
+            return self.data
 
-    def __enter__(self):
-        self.__file = open(self.filename, self.mode)
-        # self.__file.read()
-        global json_data
-        json_data = JsonData(self.__file, json.load(self.__file))
-        # self.__file.write("")
-        return json_data
+        with open(self.filename, 'r') as f:
+            data = f.read()
+            self.data = json.loads(data if len(data) > 0 else '{}')
+            return self.data
 
-    def __exit__(self, exc_type, exc_value, exc_traceback):
-        json.dump(json_data.data, json_data.file, indent=0)
-        if not self.__file.closed:
-            self.__file.close()
+    def __exit__(self, exc_type, exc_value, exc_traceback) -> None:
+        with open(self.filename, 'w') as f:
+            f.write(json.dumps(self.data))
 
 
-class JsonData:
-
-    def __init__(self, file, data):
-        self.file = file
-        self.data = data
-
-    def get_data(self):
-        return self.file
-
-    def set_obj(self, id_obj, content_obj):
-        if id_obj not in self.data:
-            self.data[id_obj] = content_obj
+class DataRepository:
+    def __init__(self, loader: Optional[JsonDataLoader] = None):
+        if loader is None:
+            self.loader = JsonDataLoader("database.json")
         else:
-            print("Объект уже существует")
-        return self.data
+            self.loader = loader
 
-    def read_obj(self, id_obj):
-        return self.data[id_obj]
+    def create(self, id_obj: int, content_obj: dict, override: bool = False) -> None:
+        with self.loader as data:
+            if id_obj in data and not override:
+                print("Объект уже существует")
+                return
+            data[str(id_obj)] = content_obj
 
-    def update_obj(self, id_obj, content_obj):
-        if id_obj in self.data:
-            self.data[id_obj] = content_obj
-        else:
-            print("Объекта не существует")
-        return self.data
+    def get(self, id_obj: int) -> dict | None:
+        with self.loader as data:
+            return data.get(str(id_obj), None)
 
-    def del_obj(self, id_obj):
-        if id_obj in self.data:
-            del self.data[id_obj]
-        else:
-            print("Объекта не существует")
-        return self.data
+    def update(self, id_obj: int, content_obj: dict) -> None:
+        with self.loader as data:
+            if str(id_obj) not in data:
+                print("Объекта не существует")
+                return
+
+            data[str(id_obj)] = content_obj
+
+    def delete(self, id_obj: int) -> dict | None:
+        with self.loader as data:
+            if id_obj not in data:
+                print("Объекта не существует")
+
+            data = data.pop(str(id_obj))
+            return data
 
 
-with ContexManager("json_db.json") as f:
-    # print(f.read_obj("test2"))
-    f.set_obj("sobaka", 123)
+def main():
+    repo = DataRepository()
+
+    repo.create(1, {"jopa": "jopa"})
+
+    obj: dict[str, str] | None = repo.get(1)
+    if obj is not None:
+        print(f"Object :{obj}")
+    obj["new_jopa"] = "new_jopa"
+    repo.update(1, obj)
+    if obj is not None:
+        print(f"Object :{obj}")
+
+    repo.delete(1)
+    obj = repo.get(1)
+    if obj is None:
+        print("Object deleted!")
+
+
+if __name__ == "__main__":
+    main()
